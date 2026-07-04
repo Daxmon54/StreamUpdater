@@ -13,6 +13,7 @@ Partial Class SettingsWindow
 
     Public Sub New()
         InitializeComponent()
+        NativeTheme.Track(Me)
         _settings = Application.Instance.Settings
         PopulateChoices()
         LoadFromSettings()

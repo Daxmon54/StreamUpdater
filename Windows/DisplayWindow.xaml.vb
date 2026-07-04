@@ -1,5 +1,6 @@
 Imports System.Windows
 Imports StreamUpdater.Models
+Imports StreamUpdater.Services
 
 ''' <summary>Ports the essential settings from WIN_Display (default text + time-out + source flags).</summary>
 Partial Class DisplayWindow
@@ -9,6 +10,7 @@ Partial Class DisplayWindow
 
     Public Sub New()
         InitializeComponent()
+        NativeTheme.Track(Me)
         _settings = Application.Instance.Settings
         TxtDefault.Text = _settings.DefaultText
         TxtTimeout.Text = _settings.TimeOut.ToString()

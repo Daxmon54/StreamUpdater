@@ -25,6 +25,7 @@ Partial Class HourTextWindow
 
     Public Sub New(title As String, fileName As String, sectionPrefix As String)
         InitializeComponent()
+        NativeTheme.Track(Me)
         Me.Title = title
         _store = New HourTextStore(fileName, sectionPrefix)
 

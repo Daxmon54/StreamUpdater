@@ -29,6 +29,7 @@ Partial Class MainWindow
 
     Public Sub New()
         InitializeComponent()
+        NativeTheme.Track(Me)
         AddHandler _countdown.Tick, AddressOf OnCountdownTick
         AddHandler ThemeManager.ThemeChanged, Sub() SyncThemeMenu()
         AddHandler Loaded, AddressOf OnLoaded

@@ -2,6 +2,7 @@ Imports System.Diagnostics
 Imports System.Reflection
 Imports System.Windows
 Imports System.Windows.Navigation
+Imports StreamUpdater.Services
 
 ''' <summary>Ports WIN_About – logo, version (from the assembly) and a website link.</summary>
 Partial Class AboutWindow
@@ -11,6 +12,7 @@ Partial Class AboutWindow
 
     Public Sub New()
         InitializeComponent()
+        NativeTheme.Track(Me)
         Dim ver = Assembly.GetExecutingAssembly().GetName().Version.ToString()
         LblVersion.Text = "Versie: " & ver
         LinkSite.NavigateUri = New Uri(SiteUrl)
