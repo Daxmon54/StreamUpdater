@@ -1,0 +1,46 @@
+<Window x:Class="MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="StreamUpdater" Height="180" Width="560"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanMinimize">
+    <DockPanel>
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_Programma">
+                <MenuItem Header="Instellingen" Click="OnSettings" />
+                <MenuItem Header="Infoweergave" Click="OnDisplay" />
+                <MenuItem Header="Standaard Teksten" Click="OnStandardTexts" />
+                <MenuItem Header="Programma's" Click="OnPrograms" />
+                <Separator />
+                <MenuItem Header="Afsluiten" Click="OnExit" />
+            </MenuItem>
+            <MenuItem Header="_Weergave">
+                <MenuItem Header="Minimaliseer" Click="OnMinimize" />
+                <Separator />
+                <MenuItem x:Name="MnuLight" Header="Licht thema" IsCheckable="True" Click="OnLightTheme" />
+                <MenuItem x:Name="MnuDark" Header="Donker thema" IsCheckable="True" Click="OnDarkTheme" />
+            </MenuItem>
+            <MenuItem Header="_?">
+                <MenuItem Header="Omtrent dit programma" Click="OnAbout" />
+            </MenuItem>
+        </Menu>
+
+        <Border Padding="18,14" Background="{DynamicResource WindowBackgroundBrush}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock x:Name="LblStatus" Grid.Row="0" FontWeight="Bold" FontSize="14"
+                           Foreground="{DynamicResource StatusAccentBrush}" Text="" />
+                <TextBlock x:Name="LblInfo" Grid.Row="1" Margin="0,6,0,0" FontSize="14"
+                           TextTrimming="CharacterEllipsis" Text="" />
+
+                <ProgressBar x:Name="Timer" Grid.Row="3" Minimum="0" Maximum="60" Value="0" />
+            </Grid>
+        </Border>
+    </DockPanel>
+</Window>

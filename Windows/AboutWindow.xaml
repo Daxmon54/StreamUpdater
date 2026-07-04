@@ -1,0 +1,28 @@
+<Window x:Class="AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Omtrent dit programma" Height="300" Width="480"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+    <Grid Margin="18">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Image Grid.Column="0" Width="120" Height="120" VerticalAlignment="Top"
+               Source="pack://application:,,,/Assets/logo.png" Stretch="Uniform" Margin="0,0,18,0" />
+
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+            <TextBlock Text="StreamUpdater" FontSize="22" FontWeight="Bold" />
+            <TextBlock x:Name="LblVersion" Margin="0,8,0,0" FontSize="14" />
+            <TextBlock Text="© Patrick Thijs 2024" Margin="0,8,0,0" FontSize="13"
+                       Foreground="{DynamicResource MutedForegroundBrush}" />
+            <TextBlock Margin="0,16,0,0">
+                <Hyperlink x:Name="LinkSite" Click="OnLink" Foreground="{DynamicResource AccentBrush}">
+                    <Run Text="Website" />
+                </Hyperlink>
+            </TextBlock>
+            <Button Content="Sluiten" Click="OnClose" HorizontalAlignment="Left" Margin="0,24,0,0" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+</Window>
