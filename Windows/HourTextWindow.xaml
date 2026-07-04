@@ -2,7 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Teksten" Height="560" Width="560"
-        WindowStartupLocation="CenterOwner" MinWidth="440" MinHeight="420">
+        WindowStartupLocation="CenterOwner" MinWidth="440" MinHeight="420"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
     <Grid Margin="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
