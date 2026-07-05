@@ -54,6 +54,15 @@ The **RDS** tab additionally has a **Test DB-verbinding** button that pings the 
 (`SELECT 1`) using the on-screen RDS values, so you can validate database connectivity on its own,
 separate from a full send.
 
+## Debug mode
+
+The **Info** tab has a **Debugmodus** checkbox (persisted to `[App] Debug`). When enabled, a failed
+send shows full diagnostics instead of just a short status: for HTTP targets (Icecast/Shoutcast/
+RadioPlayer/DTS) the request URL, HTTP status and response body; for sockets/FTP/database the full
+exception. On the main window these appear in a dialog (consecutive identical errors are suppressed
+so an ongoing failure does not pop up on every track); the **Test verzenden** / **Test DB-verbinding**
+buttons include the same detail in their result dialog.
+
 ## Theme
 
 Light/dark is chosen from the **Weergave** menu and persisted to `[App] DarkTheme` in the INI.

@@ -98,6 +98,8 @@ Namespace Models
 
         ' --- App-specific (new in the .NET port) ---
         Public Property DarkTheme As Boolean = False
+        ''' <summary>When on, failed sends show detailed diagnostics (HTTP body / full exception).</summary>
+        Public Property DebugMode As Boolean = False
 
         Public Shared ReadOnly Property IniPath As String
             Get
@@ -167,6 +169,7 @@ Namespace Models
             s.NoAudioItem = ini.ReadBool("Source", "NoAudioItem", False)
 
             s.DarkTheme = ini.ReadBool("App", "DarkTheme", False)
+            s.DebugMode = ini.ReadBool("App", "Debug", False)
 
             Return s
         End Function
@@ -232,6 +235,7 @@ Namespace Models
             ini.WriteBool("Source", "NoAudioItem", NoAudioItem)
 
             ini.WriteBool("App", "DarkTheme", DarkTheme)
+            ini.WriteBool("App", "Debug", DebugMode)
 
             ini.Save()
         End Sub

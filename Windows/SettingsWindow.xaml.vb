@@ -99,6 +99,7 @@ Partial Class SettingsWindow
         TxtSep2.Text = s.Sep2
         ChkReplaceAmp.IsChecked = s.ReplaceAmp
         ChkNoAudio.IsChecked = s.NoAudioItem
+        ChkDebug.IsChecked = s.DebugMode
 
         SelectTabForMode(s.Mode)
     End Sub
@@ -163,6 +164,7 @@ Partial Class SettingsWindow
         s.Sep2 = TxtSep2.Text
         s.ReplaceAmp = ChkReplaceAmp.IsChecked.GetValueOrDefault()
         s.NoAudioItem = ChkNoAudio.IsChecked.GetValueOrDefault()
+        s.DebugMode = ChkDebug.IsChecked.GetValueOrDefault()
     End Sub
 
     ' ---- Helpers ----
@@ -246,11 +248,11 @@ Partial Class SettingsWindow
             Dim message = $"Mode: {probe.Mode}" & vbCrLf &
                           $"Verzonden: {result.Info}" & vbCrLf & vbCrLf &
                           $"Resultaat: {result.Status}"
-            Dim ok = result.Status.StartsWith("SEND OK", StringComparison.OrdinalIgnoreCase) OrElse
-                     result.Status.StartsWith("Info sent", StringComparison.OrdinalIgnoreCase) OrElse
-                     result.Status.StartsWith("File", StringComparison.OrdinalIgnoreCase)
+            If Not String.IsNullOrEmpty(result.Detail) Then
+                message &= vbCrLf & vbCrLf & "Details:" & vbCrLf & result.Detail
+            End If
             MessageBox.Show(message, "Test verzenden", MessageBoxButton.OK,
-                            If(ok, MessageBoxImage.Information, MessageBoxImage.Warning))
+                            If(result.IsError, MessageBoxImage.Warning, MessageBoxImage.Information))
         Catch ex As Exception
             MessageBox.Show("Test mislukt: " & ex.Message, "Test verzenden",
                             MessageBoxButton.OK, MessageBoxImage.Error)

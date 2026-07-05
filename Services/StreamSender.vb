@@ -16,6 +16,9 @@ Namespace Services
         Public Property Info As String = ""
         Public Property Status As String = ""
         Public Property Skipped As Boolean = False
+        Public Property IsError As Boolean = False
+        ''' <summary>Full diagnostic text, populated only when debug mode is on.</summary>
+        Public Property Detail As String = ""
         Public Sub New()
         End Sub
         Public Sub New(info As String, status As String)
@@ -27,7 +30,8 @@ Namespace Services
     ''' <summary>
     ''' Ports the send logic from WIN_Main (DataOntvangst3, SendRDS, SendRP, StartFTP,
     ''' Send_DTS, SendText). Each mode maps 1:1 to gnMode 1..7. Network calls are async
-    ''' so the UI thread never blocks.
+    ''' so the UI thread never blocks. When AppSettings.DebugMode is on, failures carry a
+    ''' detailed diagnostic (HTTP status + response body, or the full exception) in Detail.
     ''' </summary>
     Public Class StreamSender
 
@@ -66,18 +70,20 @@ Namespace Services
                 Return New SendResult("", "Information ignored") With {.Skipped = True}
             End If
 
-            Dim status = Await DispatchAsync(settings, liveText, track)
-            Return New SendResult(liveText, status)
+            Dim outcome = Await DispatchAsync(settings, liveText, track)
+            outcome.Info = liveText
+            Return outcome
         End Function
 
         ''' <summary>Sends a plain line (default text / standard text) – mirrors SendText.</summary>
         Public Async Function SendTextAsync(settings As AppSettings, text As String) As Task(Of SendResult)
-            Dim status = Await DispatchAsync(settings, text, New TrackInfo() With {.Artist = text, .Title = "", .InfoType = 2})
-            Return New SendResult(text, status)
+            Dim outcome = Await DispatchAsync(settings, text, New TrackInfo() With {.Artist = text, .Title = "", .InfoType = 2})
+            outcome.Info = text
+            Return outcome
         End Function
 
-        Private Async Function DispatchAsync(settings As AppSettings, liveText As String, track As TrackInfo) As Task(Of String)
-            If String.IsNullOrEmpty(liveText) Then Return "No information"
+        Private Async Function DispatchAsync(settings As AppSettings, liveText As String, track As TrackInfo) As Task(Of SendResult)
+            If String.IsNullOrEmpty(liveText) Then Return New SendResult("", "No information")
 
             Dim outText = liveText
             If settings.ReplaceAmp Then outText = outText.Replace("&", "-")
@@ -99,44 +105,66 @@ Namespace Services
                     Case StreamMode.Dts
                         Return Await SendDtsAsync(settings, track)
                     Case Else
-                        Return "Unknown mode"
+                        Return New SendResult("", "Unknown mode")
                 End Select
             Catch ex As Exception
-                Return "Error: " & ex.Message
+                ' Connection refused / DNS / timeout / socket / FTP / DB errors land here.
+                Dim detail = If(settings.DebugMode, ExceptionDetail(ex), "")
+                Return New SendResult("", "Error: " & ex.Message) With {.IsError = True, .Detail = detail}
             End Try
         End Function
 
+        ' ---- Shared HTTP send with optional detailed diagnostics -----------
+        Private Shared Async Function HttpSend(req As HttpRequestMessage, okStatus As String,
+                                               errLabel As String, debug As Boolean) As Task(Of SendResult)
+            Using resp = Await _http.SendAsync(req)
+                If resp.IsSuccessStatusCode Then Return New SendResult("", okStatus)
+
+                Dim detail = ""
+                If debug Then
+                    Dim body As String = ""
+                    Try
+                        body = Await resp.Content.ReadAsStringAsync()
+                    Catch
+                    End Try
+                    detail = "Request : " & req.Method.ToString() & " " & req.RequestUri.ToString() & Environment.NewLine &
+                             "Response: HTTP " & CInt(resp.StatusCode) & " " & resp.ReasonPhrase & Environment.NewLine &
+                             "Body    :" & Environment.NewLine & Truncate(body, 3000)
+                End If
+                Return New SendResult("", errLabel & ": HTTP " & CInt(resp.StatusCode)) With {
+                    .IsError = True, .Detail = detail}
+            End Using
+        End Function
+
         ' ---- Mode 1: Icecast ------------------------------------------------
-        Private Async Function SendIcecastAsync(s As AppSettings, song As String) As Task(Of String)
+        Private Async Function SendIcecastAsync(s As AppSettings, song As String) As Task(Of SendResult)
             Dim url = $"http://{s.StreamAddress}:{s.StreamPort}/admin/metadata?mount={Uri.EscapeDataString(s.StreamMount)}" &
                       $"&mode=updinfo&charset=UTF-8&song={Uri.EscapeDataString(song)}"
             Using req As New HttpRequestMessage(HttpMethod.Get, url)
                 AddBasicAuth(req, s.StreamUser, s.StreamPass)
-                Dim resp = Await _http.SendAsync(req)
-                Return If(resp.IsSuccessStatusCode, "SEND OK", "Icecast error: " & CInt(resp.StatusCode).ToString())
+                Return Await HttpSend(req, "SEND OK", "Icecast error", s.DebugMode)
             End Using
         End Function
 
         ' ---- Mode 3: Shoutcast ---------------------------------------------
-        Private Async Function SendShoutcastAsync(s As AppSettings, song As String) As Task(Of String)
+        Private Async Function SendShoutcastAsync(s As AppSettings, song As String) As Task(Of SendResult)
             Dim payload = song.Replace("&", "%26")
             Dim url = $"http://{s.StreamAddress}:{s.StreamPort}/admin.cgi?pass={Uri.EscapeDataString(s.StreamPass)}" &
                       $"&mode=updinfo&song={Uri.EscapeDataString(payload)}"
             Using req As New HttpRequestMessage(HttpMethod.Get, url)
                 req.Headers.UserAgent.ParseAdd("ShoutcastDSP (Mozilla Compatible)")
-                Dim resp = Await _http.SendAsync(req)
-                Return If(resp.IsSuccessStatusCode, "SEND OK", "Shoutcast error: " & CInt(resp.StatusCode).ToString())
+                Return Await HttpSend(req, "SEND OK", "Shoutcast error", s.DebugMode)
             End Using
         End Function
 
         ' ---- Mode 2: RDS (TCP socket) --------------------------------------
-        Private Async Function SendRdsAsync(s As AppSettings, text As String) As Task(Of String)
+        Private Async Function SendRdsAsync(s As AppSettings, text As String) As Task(Of SendResult)
             ' Suppress identical consecutive strings, like the original SendRDS.
-            If text = _oldString Then Return "Same string"
+            If text = _oldString Then Return New SendResult("", "Same string")
             _oldString = text
 
             ' A string of only spaces is treated as blank.
-            If text.Trim().Length = 0 Then Return "Blank string"
+            If text.Trim().Length = 0 Then Return New SendResult("", "Blank string")
 
             Select Case s.RdsEncoder
                 Case RdsType.Deva
@@ -148,7 +176,7 @@ Namespace Services
                             If s.RdsPs Then Await WriteLineAsync(stream, "DPS=" & text)
                         End Using
                     End Using
-                    Return "Info sent (Deva)"
+                    Return New SendResult("", "Info sent (Deva)")
 
                 Case RdsType.Orban
                     Using client As New TcpClient()
@@ -157,21 +185,16 @@ Namespace Services
                             If s.RdsRt Then Await WriteLineAsync(stream, "RT=" & text)
                         End Using
                     End Using
-                    Return "Info sent (Orban)"
+                    Return New SendResult("", "Info sent (Orban)")
 
                 Case RdsType.Database
                     Return Await SendRdsDatabaseAsync(s, text)
 
                 Case Else
-                    Return "Unknown RDS type"
+                    Return New SendResult("", "Unknown RDS type")
             End Select
         End Function
 
-        ''' <summary>
-        ''' Mirrors SendRDS case 3 / InitDB: inserts the current text into the MySQL/MariaDB
-        ''' "Messages" table (columns TimeStamp, Editions, TxtMessage). The original used a
-        ''' WinDev HFSQL "WebMaster" database; here it is a MySQL schema of the same name.
-        ''' </summary>
         Private Shared Function BuildRdsConnectionString(s As AppSettings) As String
             Return New MySqlConnectionStringBuilder With {
                 .Server = s.RdsAddress,
@@ -185,7 +208,7 @@ Namespace Services
 
         ''' <summary>
         ''' Lightweight connectivity check for the MySQL/MariaDB "Database" encoder: opens a
-        ''' connection and runs SELECT 1. Returns "OK" on success or "Error: ..." otherwise.
+        ''' connection and runs SELECT 1. Returns "OK", or "Error: ..." (full detail in debug mode).
         ''' </summary>
         Public Shared Async Function TestDatabaseAsync(s As AppSettings) As Task(Of String)
             Try
@@ -198,11 +221,15 @@ Namespace Services
                 End Using
                 Return "OK"
             Catch ex As Exception
-                Return "Error: " & ex.Message
+                Return "Error: " & If(s.DebugMode, ExceptionDetail(ex), ex.Message)
             End Try
         End Function
 
-        Private Shared Async Function SendRdsDatabaseAsync(s As AppSettings, text As String) As Task(Of String)
+        ''' <summary>
+        ''' Mirrors SendRDS case 3 / InitDB: inserts the current text into the MySQL/MariaDB
+        ''' "Messages" table (columns TimeStamp, Editions, TxtMessage).
+        ''' </summary>
+        Private Shared Async Function SendRdsDatabaseAsync(s As AppSettings, text As String) As Task(Of SendResult)
             Using conn As New MySqlConnection(BuildRdsConnectionString(s))
                 Await conn.OpenAsync()
                 Using cmd = conn.CreateCommand()
@@ -213,7 +240,7 @@ Namespace Services
                     Await cmd.ExecuteNonQueryAsync()
                 End Using
             End Using
-            Return "Info sent (Database)"
+            Return New SendResult("", "Info sent (Database)")
         End Function
 
         Private Shared Async Function WriteLineAsync(stream As NetworkStream, line As String) As Task
@@ -223,9 +250,9 @@ Namespace Services
         End Function
 
         ' ---- Mode 4: RadioPlayer -------------------------------------------
-        Private Async Function SendRadioPlayerAsync(s As AppSettings, artist As String, title As String) As Task(Of String)
+        Private Async Function SendRadioPlayerAsync(s As AppSettings, artist As String, title As String) As Task(Of SendResult)
             Dim key = If(artist, "") & "-" & If(title, "")
-            If key = _oldString Then Return "Same string"
+            If key = _oldString Then Return New SendResult("", "Same string")
             _oldString = key
 
             If String.IsNullOrEmpty(title) Then title = "   "
@@ -233,13 +260,12 @@ Namespace Services
             Dim url = s.RpIngest & "?" & query
             Using req As New HttpRequestMessage(HttpMethod.Post, url)
                 AddBasicAuth(req, s.RpUser, s.RpApiKey)
-                Dim resp = Await _http.SendAsync(req)
-                Return If(resp.IsSuccessStatusCode, "SEND OK", "RadioPlayer error: " & CInt(resp.StatusCode).ToString())
+                Return Await HttpSend(req, "SEND OK", "RadioPlayer error", s.DebugMode)
             End Using
         End Function
 
         ' ---- Mode 5: Website (write file + FTP) ----------------------------
-        Private Async Function SendWebsiteAsync(s As AppSettings, info As String) As Task(Of String)
+        Private Async Function SendWebsiteAsync(s As AppSettings, info As String) As Task(Of SendResult)
             Dim song = If(s.WebPrefix.Length > 0, s.WebPrefix & info, info)
             Dim webDir = System.IO.Path.Combine(AppContext.BaseDirectory, "WEB")
             Directory.CreateDirectory(webDir)
@@ -248,8 +274,8 @@ Namespace Services
             Return Await StartFtpAsync(s, localPath)
         End Function
 
-        Private Async Function StartFtpAsync(s As AppSettings, localPath As String) As Task(Of String)
-            If String.IsNullOrEmpty(s.FtpAddress) Then Return "File written (no FTP configured)"
+        Private Async Function StartFtpAsync(s As AppSettings, localPath As String) As Task(Of SendResult)
+            If String.IsNullOrEmpty(s.FtpAddress) Then Return New SendResult("", "File written (no FTP configured)")
             Dim fileName = System.IO.Path.GetFileName(localPath)
             Dim remote = s.FtpRemote.TrimEnd("/"c) & "/" & fileName
             Dim host = s.FtpAddress
@@ -269,19 +295,19 @@ Namespace Services
                 Await rs.WriteAsync(data, 0, data.Length)
             End Using
             Using resp = CType(Await request.GetResponseAsync(), FtpWebResponse)
-                Return "File sent to FTP server (" & resp.StatusDescription.Trim() & ")"
+                Return New SendResult("", "File sent to FTP server (" & resp.StatusDescription.Trim() & ")")
             End Using
         End Function
 
         ' ---- Mode 6: BUTT (write text file) --------------------------------
-        Private Function SendButt(s As AppSettings, info As String) As String
-            If String.IsNullOrEmpty(s.ButtFile) Then Return "No BUTT file configured"
+        Private Function SendButt(s As AppSettings, info As String) As SendResult
+            If String.IsNullOrEmpty(s.ButtFile) Then Return New SendResult("", "No BUTT file configured")
             File.WriteAllText(s.ButtFile, info, New UTF8Encoding(False))
-            Return "SEND OK"
+            Return New SendResult("", "SEND OK")
         End Function
 
         ' ---- Mode 7: DTS ---------------------------------------------------
-        Private Async Function SendDtsAsync(s As AppSettings, track As TrackInfo) As Task(Of String)
+        Private Async Function SendDtsAsync(s As AppSettings, track As TrackInfo) As Task(Of SendResult)
             ' Compose the request the way DataOntvangst3 case 7 / Send_DTS does, but
             ' URL-encode the individual query VALUES (the correct, working behaviour).
             Dim url = s.DtsUrl & "?" &
@@ -292,8 +318,7 @@ Namespace Services
                       "&artist=" & Uri.EscapeDataString(If(track.Artist, "")) &
                       "&duration=" & Uri.EscapeDataString(If(track.Duration, ""))
             Using req As New HttpRequestMessage(HttpMethod.Get, url)
-                Dim resp = Await _http.SendAsync(req)
-                Return If(resp.IsSuccessStatusCode, "SEND OK", "SEND ERROR")
+                Return Await HttpSend(req, "SEND OK", "SEND ERROR", s.DebugMode)
             End Using
         End Function
 
@@ -302,6 +327,26 @@ Namespace Services
             Dim token = Convert.ToBase64String(Encoding.UTF8.GetBytes(user & ":" & pass))
             req.Headers.Authorization = New AuthenticationHeaderValue("Basic", token)
         End Sub
+
+        ''' <summary>Full exception text (type, message, inner exceptions and stack) for debug mode.</summary>
+        Private Shared Function ExceptionDetail(ex As Exception) As String
+            Dim sb As New StringBuilder()
+            Dim cur = ex
+            Do While cur IsNot Nothing
+                sb.AppendLine(cur.GetType().FullName & ": " & cur.Message)
+                cur = cur.InnerException
+                If cur IsNot Nothing Then sb.AppendLine("  --> inner:")
+            Loop
+            sb.AppendLine()
+            sb.AppendLine(ex.ToString())
+            Return Truncate(sb.ToString(), 4000)
+        End Function
+
+        Private Shared Function Truncate(s As String, max As Integer) As String
+            If s Is Nothing Then Return ""
+            If s.Length <= max Then Return s
+            Return s.Substring(0, max) & "… (" & (s.Length - max) & " more characters)"
+        End Function
 
     End Class
 

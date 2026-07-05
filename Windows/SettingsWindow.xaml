@@ -216,6 +216,9 @@
                     </Grid>
                     <CheckBox x:Name="ChkReplaceAmp" Content="Vervang &amp; door -" Margin="0,10,0,0" />
                     <CheckBox x:Name="ChkNoAudio" Content="Geen audio-item" />
+                    <CheckBox x:Name="ChkDebug" Content="Debugmodus (toon gedetailleerde foutinformatie)" Margin="0,10,0,0" />
+                    <TextBlock Text="Bij een fout (bv. Shoutcast-update) wordt de volledige foutinformatie getoond."
+                               Foreground="{DynamicResource MutedForegroundBrush}" TextWrapping="Wrap" Margin="22,0,0,0" />
                 </StackPanel>
             </TabItem>
         </TabControl>
