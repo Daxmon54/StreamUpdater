@@ -152,9 +152,33 @@ Namespace Services
             Dim url = $"http://{s.StreamAddress}:{s.StreamPort}/admin.cgi?pass={Uri.EscapeDataString(s.StreamPass)}" &
                       $"&mode=updinfo&song={Uri.EscapeDataString(payload)}"
             Using req As New HttpRequestMessage(HttpMethod.Get, url)
+                ' SHOUTcast v1 (DNAS 1.x) speaks old HTTP and closes the connection right after
+                ' applying the update; HTTP/1.0 + Connection:close makes that a normal end-of-response.
+                req.Version = HttpVersion.Version10
+                req.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+                req.Headers.ConnectionClose = True
                 req.Headers.UserAgent.ParseAdd("ShoutcastDSP (Mozilla Compatible)")
-                Return Await HttpSend(req, "SEND OK", "Shoutcast error", s.DebugMode)
+                Try
+                    Return Await HttpSend(req, "SEND OK", "Shoutcast error", s.DebugMode)
+                Catch ex As Exception When IsPrematureEnd(ex)
+                    ' The server dropped the connection after receiving the request. For Shoutcast
+                    ' updinfo the metadata is applied before the drop, so treat it as sent (as the
+                    ' original WinDev app did by ignoring the response).
+                    Return New SendResult("", "SEND OK (verbinding door server gesloten)")
+                End Try
             End Using
+        End Function
+
+        ''' <summary>True if the exception chain is a "response ended prematurely" (server closed early).</summary>
+        Private Shared Function IsPrematureEnd(ex As Exception) As Boolean
+            Dim cur = ex
+            Do While cur IsNot Nothing
+                Dim io = TryCast(cur, HttpIOException)
+                If io IsNot Nothing AndAlso io.HttpRequestError = HttpRequestError.ResponseEnded Then Return True
+                If cur.Message.IndexOf("response ended prematurely", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+                cur = cur.InnerException
+            Loop
+            Return False
         End Function
 
         ' ---- Mode 2: RDS (TCP socket) --------------------------------------
