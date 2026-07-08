@@ -148,9 +148,10 @@ Namespace Services
 
         ' ---- Mode 3: Shoutcast ---------------------------------------------
         Private Async Function SendShoutcastAsync(s As AppSettings, song As String) As Task(Of SendResult)
-            Dim payload = song.Replace("&", "%26")
+            ' Uri.EscapeDataString already UTF-8 percent-encodes everything (incl. '&' -> %26),
+            ' so no manual replacement is needed (doing both would double-encode to %2526).
             Dim url = $"http://{s.StreamAddress}:{s.StreamPort}/admin.cgi?pass={Uri.EscapeDataString(s.StreamPass)}" &
-                      $"&mode=updinfo&song={Uri.EscapeDataString(payload)}"
+                      $"&mode=updinfo&song={Uri.EscapeDataString(song)}"
             Using req As New HttpRequestMessage(HttpMethod.Get, url)
                 ' SHOUTcast v1 (DNAS 1.x) speaks old HTTP and closes the connection right after
                 ' applying the update; HTTP/1.0 + Connection:close makes that a normal end-of-response.

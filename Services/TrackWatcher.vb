@@ -1,4 +1,5 @@
 Imports System.IO
+Imports System.Text
 Imports System.Text.Json
 Imports System.Threading
 Imports StreamUpdater.Models
@@ -91,12 +92,14 @@ Namespace Services
             For attempt = 1 To 5
                 Try
                     If Not File.Exists(_path) Then Return Nothing
-                    Dim text As String
+                    Dim bytes As Byte()
                     Using fs As New FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
-                        Using reader As New StreamReader(fs)
-                            text = reader.ReadToEnd()
+                        Using ms As New MemoryStream()
+                            fs.CopyTo(ms)
+                            bytes = ms.ToArray()
                         End Using
                     End Using
+                    Dim text = DecodeText(bytes)
                     If String.IsNullOrWhiteSpace(text) Then Return Nothing
                     Dim opts As New JsonSerializerOptions With {.PropertyNameCaseInsensitive = True}
                     Return JsonSerializer.Deserialize(Of TrackInfo)(text, opts)
@@ -108,6 +111,47 @@ Namespace Services
                 End Try
             Next
             Return Nothing
+        End Function
+
+        Private Shared _ansi As Encoding
+
+        ''' <summary>
+        ''' Decodes the watch file to text, preserving accented/Unicode characters:
+        ''' honours a UTF-8/UTF-16 BOM, otherwise tries strict UTF-8 and falls back to the
+        ''' Windows-1252 (ANSI) code page for legacy files (as WinDev wrote them).
+        ''' </summary>
+        Friend Shared Function DecodeText(bytes As Byte()) As String
+            If bytes Is Nothing OrElse bytes.Length = 0 Then Return ""
+
+            If bytes.Length >= 3 AndAlso bytes(0) = &HEF AndAlso bytes(1) = &HBB AndAlso bytes(2) = &HBF Then
+                Return Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3)
+            End If
+            If bytes.Length >= 2 AndAlso bytes(0) = &HFF AndAlso bytes(1) = &HFE Then
+                Return Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2)
+            End If
+            If bytes.Length >= 2 AndAlso bytes(0) = &HFE AndAlso bytes(1) = &HFF Then
+                Return Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2)
+            End If
+
+            ' No BOM: valid UTF-8 wins; otherwise treat as legacy ANSI (Windows-1252).
+            Try
+                Dim strictUtf8 As New UTF8Encoding(encoderShouldEmitUTF8Identifier:=False, throwOnInvalidBytes:=True)
+                Return strictUtf8.GetString(bytes)
+            Catch ex As DecoderFallbackException
+                Return AnsiEncoding().GetString(bytes)
+            End Try
+        End Function
+
+        Private Shared Function AnsiEncoding() As Encoding
+            If _ansi Is Nothing Then
+                Try
+                    Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)
+                    _ansi = Encoding.GetEncoding(1252)
+                Catch
+                    _ansi = Encoding.Latin1 ' covers é à è etc. even without the code-page provider
+                End Try
+            End If
+            Return _ansi
         End Function
 
         Public Sub Dispose() Implements IDisposable.Dispose

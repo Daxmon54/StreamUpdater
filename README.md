@@ -54,6 +54,17 @@ The **RDS** tab additionally has a **Test DB-verbinding** button that pings the 
 (`SELECT 1`) using the on-screen RDS values, so you can validate database connectivity on its own,
 separate from a full send.
 
+## Character encoding (accented / Unicode text)
+
+Accented and Unicode characters (é, à, è, ë, ç, €, …) are preserved end to end:
+
+- **Reading** the watch file honours a UTF-8/UTF-16 BOM, otherwise tries strict UTF-8 and
+  falls back to Windows-1252 (ANSI) for legacy files — so both modern UTF-8 and older
+  ANSI producers are read correctly.
+- **Sending** uses UTF-8: HTTP targets (Icecast/Shoutcast/RadioPlayer/DTS) percent-encode the
+  values as UTF-8 (Icecast also sends `charset=UTF-8`); the Website/BUTT file outputs are written
+  as UTF-8. `&` is encoded exactly once (`%26`).
+
 ## Debug mode
 
 The **Info** tab has a **Debugmodus** checkbox (persisted to `[App] Debug`). When enabled, a failed

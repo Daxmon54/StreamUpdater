@@ -38,6 +38,8 @@
   <ItemGroup>
     <!-- RDS "Database" encoder mode inserts now-playing rows into a MySQL/MariaDB table. -->
     <PackageReference Include="MySqlConnector" Version="2.3.7" />
+    <!-- Enables the Windows-1252 (ANSI) code page for reading legacy watch files. -->
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
