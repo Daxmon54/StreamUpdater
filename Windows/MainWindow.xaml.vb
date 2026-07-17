@@ -20,7 +20,6 @@ Partial Class MainWindow
     Private _tray As WinForms.NotifyIcon
     Private _busy As Boolean
     Private _defaultSent As Boolean
-    Private _lastDebugError As String = ""
 
     Private ReadOnly Property Settings As AppSettings
         Get
@@ -91,31 +90,19 @@ Partial Class MainWindow
             LblStatus.Text = result.Status
             UpdateTrayTip(result.Info)
             StartTimeoutCountdown()
-            MaybeShowDebug(result)
+            LogIfError(result)
         Catch ex As Exception
             LblStatus.Text = "Error: " & ex.Message
+            Logger.Error("Unexpected error while processing a track update", ex.ToString())
         Finally
             _busy = False
         End Try
     End Sub
 
-    ''' <summary>
-    ''' In debug mode, shows the full diagnostic for a failed send. Consecutive identical
-    ''' errors are suppressed so an ongoing failure does not pop a dialog on every track.
-    ''' </summary>
-    Private Sub MaybeShowDebug(result As SendResult)
-        If result Is Nothing OrElse Not result.IsError Then
-            _lastDebugError = ""
-            Return
-        End If
-        If Not Settings.DebugMode Then Return
-
-        Dim detail = If(String.IsNullOrEmpty(result.Detail), result.Status, result.Detail)
-        If detail = _lastDebugError Then Return ' already shown for this ongoing error
-        _lastDebugError = detail
-
-        MessageBox.Show(result.Status & Environment.NewLine & Environment.NewLine & detail,
-                        "StreamUpdater — Debug", MessageBoxButton.OK, MessageBoxImage.Warning)
+    ''' <summary>Writes a failed send to the daily log file (LOG\yyyy-MM-dd.log).</summary>
+    Private Sub LogIfError(result As SendResult)
+        If result Is Nothing OrElse Not result.IsError Then Return
+        Logger.Error($"Mode {Settings.Mode}: {result.Status}", result.Detail)
     End Sub
 
     ' ---- Default-text countdown (DefaultTimer / SendText) ----
@@ -147,9 +134,10 @@ Partial Class MainWindow
             LblInfo.Text = result.Info
             LblStatus.Text = result.Status
             UpdateTrayTip(result.Info)
-            MaybeShowDebug(result)
+            LogIfError(result)
         Catch ex As Exception
             LblStatus.Text = "Error: " & ex.Message
+            Logger.Error("Unexpected error while sending default text", ex.ToString())
         End Try
     End Sub
 

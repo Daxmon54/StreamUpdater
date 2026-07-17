@@ -37,6 +37,7 @@ StreamUpdater.ini
 Programs.ini
 Standard.ini
 WEB/
+LOG/
 
 # OS
 Thumbs.db

@@ -65,14 +65,24 @@ Accented and Unicode characters (é, à, è, ë, ç, €, …) are preserved end
   values as UTF-8 (Icecast also sends `charset=UTF-8`); the Website/BUTT file outputs are written
   as UTF-8. `&` is encoded exactly once (`%26`).
 
-## Debug mode
+## Error logging & debug mode
 
-The **Info** tab has a **Debugmodus** checkbox (persisted to `[App] Debug`). When enabled, a failed
-send shows full diagnostics instead of just a short status: for HTTP targets (Icecast/Shoutcast/
-RadioPlayer/DTS) the request URL, HTTP status and response body; for sockets/FTP/database the full
-exception. On the main window these appear in a dialog (consecutive identical errors are suppressed
-so an ongoing failure does not pop up on every track); the **Test verzenden** / **Test DB-verbinding**
-buttons include the same detail in their result dialog.
+Errors are **never shown as a pop-up during normal operation** — every failed send is written to a
+daily log file:
+
+```
+<program folder>\LOG\yyyy-MM-dd.log
+```
+
+Each entry is `[timestamp] ERROR: <mode>: <status>`. The `LOG` folder is created automatically.
+
+The **Info** tab has a **Debugmodus** checkbox (persisted to `[App] Debug`). It controls how much is
+logged: with it **off**, the concise status is logged; with it **on**, the full diagnostic is also
+logged — for HTTP targets (Icecast/Shoutcast/RadioPlayer/DTS) the request URL, HTTP status and
+response body; for sockets/FTP/database the full exception.
+
+The manual **Test verzenden** / **Test DB-verbinding** buttons still show their result (and, in debug
+mode, the detail) in a dialog, since those are direct feedback to a button press.
 
 ## Theme
 

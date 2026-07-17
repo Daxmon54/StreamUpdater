@@ -98,7 +98,7 @@ Namespace Models
 
         ' --- App-specific (new in the .NET port) ---
         Public Property DarkTheme As Boolean = False
-        ''' <summary>When on, failed sends show detailed diagnostics (HTTP body / full exception).</summary>
+        ''' <summary>When on, the full diagnostic (HTTP body / exception) is also written to the log.</summary>
         Public Property DebugMode As Boolean = False
 
         Public Shared ReadOnly Property IniPath As String
